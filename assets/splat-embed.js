@@ -71,15 +71,28 @@ function startViewer(el) {
     useBuiltInControls: true,
     selfDrivenMode: true,
   });
-  let src = el.dataset.splat, format;
-  const inline = el.dataset.splatInline && document.getElementById(el.dataset.splatInline);
-  if (inline) {
-    const b64 = inline.textContent.replace(/\s+/g, '');
-    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-    src = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
-    format = GS.SceneFormat.Splat;
-  }
-  viewer.addSplatScene(src, { showLoadingUI: true, progressiveLoad: true, format }).then(() => {
+  const loading = document.createElement('div');
+  loading.textContent = 'Loading 3D model\u2026';
+  loading.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:14px Arial,sans-serif;color:#8a94a0;pointer-events:none';
+  el.appendChild(loading);
+  // The model is fetched here and handed to the library as a local Blob. The library sizes its buffers
+  // from Content-Length, which is the *compressed* size when the server gzips (GitHub Pages, most CDNs),
+  // and then fails on the larger decompressed stream; fetch() itself decompresses transparently.
+  const source = (async () => {
+    const inline = el.dataset.splatInline && document.getElementById(el.dataset.splatInline);
+    let bytes;
+    if (inline) {
+      bytes = Uint8Array.from(atob(inline.textContent.replace(/\s+/g, '')), (c) => c.charCodeAt(0));
+    } else {
+      const res = await fetch(el.dataset.splat);
+      if (!res.ok) throw new Error(`HTTP ${res.status} for ${el.dataset.splat}`);
+      bytes = await res.arrayBuffer();
+    }
+    return URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
+  })();
+  source.then((src) => viewer.addSplatScene(src, { showLoadingUI: true, progressiveLoad: false, format: GS.SceneFormat.Splat }))
+  .then(() => {
+    loading.remove();
     viewer.start();
     const c = viewer.controls || viewer.perspectiveControls;
     if (c) {
@@ -97,7 +110,7 @@ function startViewer(el) {
       renderer.domElement.addEventListener('wheel', pause, { passive: true });
     }
   }).catch((err) => {
-    el.textContent = 'Could not load the 3D model.';
+    loading.textContent = 'Could not load the 3D model.';
     console.error('splat-embed', el.dataset.splat, err);
   });
 }
