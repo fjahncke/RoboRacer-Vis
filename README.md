@@ -5,7 +5,7 @@ through the "iFrame with consent" content element.
 
 | Robot | Embed URL (iframe) |
 |---|---|
-| RoboRacer (F1TENTH) | `https://<user>.github.io/avs-robots/roboracer/` |
+| RoboRacer (F1TENTH) | `https://fjahncke.github.io/RoboRacer-Vis/roboracer/` |
 
 **Add a robot:** in the RoboRacer-3D-Isaac-Sim repository run
 `python scripts/export_web_assets.py <vehicle> --out outputs/web/<robot>`, copy its `model.splat` into a
