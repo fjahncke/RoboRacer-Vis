@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AVS robots · 3D models</title>
+<style>
+  body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#333;background:#fff}
+  main{max-width:960px;margin:0 auto;padding:24px 16px}
+  h1,h2{color:#0065bd;font-weight:normal}
+  .splat-viewer{width:100%;aspect-ratio:16/9;background:linear-gradient(#f4f6f8,#e3e8ee);border-radius:6px;overflow:hidden}
+  p{color:#555;line-height:1.5}
+</style></head>
+<body><main>
+  <h1>Robots</h1>
+  <p>Interactive 3D Gaussian-splat models of the robots of the TUM Professorship of Autonomous Vehicle Systems.
+     Drag to orbit, scroll to zoom.</p>
+  <section>
+    <h2>RoboRacer (F1TENTH)</h2>
+    <div class="splat-viewer" data-splat="roboracer/model.splat"></div>
+    <p>1:10-scale autonomous race car on a Traxxas Slash chassis with a Hokuyo LiDAR, ZED stereo camera and
+       motion-capture markers, reconstructed from a phone walk-around as a 3D Gaussian splat.
+       Embed: <code>roboracer/</code></p>
+  </section>
+</main>
+<script type="module" src="assets/splat-embed.js"></script>
+</body></html>

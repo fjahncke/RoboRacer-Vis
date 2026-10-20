@@ -1,0 +1,120 @@
+/*
+ * Interactive Gaussian-splat robot cards, self-hosted (no CDN), for TYPO3 or any page.
+ *
+ *   <div class="splat-viewer" data-splat="/fileadmin/roboracer/model.splat"></div>
+ *   <script type="module" src="/fileadmin/roboracer/splat-embed.js"></script>
+ *
+ * Every element with data-splat becomes a viewer: drag to orbit, scroll/pinch to zoom, auto-rotation that
+ * resumes 3 s after the last interaction. Viewers start when scrolled into view.
+ *
+ * Optional attributes (defaults fit the RoboRacer model: metres, z up, +x forward):
+ *   data-distance="0.85"   camera distance [m]        data-elevation="22"  camera elevation [deg]
+ *   data-azimuth="35"     start azimuth [deg]        data-target-z="0.09" look-at height [m]
+ *   data-speed="1.0"      auto-rotate speed          data-fov="35"        vertical field of view [deg]
+ *   data-splat-inline="id"   read the model from <script type="application/octet-stream" id="id"> (base64)
+ *                            in the page itself: a single-file viewer for CMSs that refuse .js/.splat uploads
+ *
+ * Built on three.js and GaussianSplats3D (both MIT, vendor/ with their licences).
+ */
+import * as THREE from './vendor/three.module.js';
+import * as GS from './vendor/gaussian-splats-3d.module.js';
+
+const DEFAULTS = { distance: 0.85, elevation: 22, azimuth: 35, targetZ: 0.09, speed: 1.0, fov: 35 };
+
+function num(el, key, fallback) {
+  const v = parseFloat(el.dataset[key]);
+  return Number.isFinite(v) ? v : fallback;
+}
+
+function startViewer(el) {
+  if (el.dataset.splatStarted) return;
+  el.dataset.splatStarted = '1';
+  if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+  if (!el.style.height && el.clientHeight < 50) el.style.aspectRatio = el.style.aspectRatio || '16 / 9';
+
+  const o = {};
+  for (const k of Object.keys(DEFAULTS)) o[k] = num(el, k, DEFAULTS[k]);
+  const az = THREE.MathUtils.degToRad(o.azimuth), elv = THREE.MathUtils.degToRad(o.elevation);
+  const target = new THREE.Vector3(0, 0, o.targetZ);
+  const eye = new THREE.Vector3(Math.cos(az) * Math.cos(elv), Math.sin(az) * Math.cos(elv), Math.sin(elv))
+    .multiplyScalar(o.distance).add(target);
+
+  // our own renderer: alpha so the page background shows through, sized to the card
+  const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, precision: 'highp' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setClearColor(0x000000, 0.0);
+  renderer.domElement.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none';
+  el.appendChild(renderer.domElement);
+  const camera = new THREE.PerspectiveCamera(o.fov, 1, 0.02, 50);
+  camera.up.set(0, 0, 1);
+  camera.position.copy(eye);
+  camera.lookAt(target);
+  const resize = () => {
+    const w = Math.max(1, el.clientWidth), h = Math.max(1, el.clientHeight);
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  };
+  resize();
+  new ResizeObserver(resize).observe(el);
+
+  const viewer = new GS.Viewer({
+    rootElement: el,
+    renderer, camera,
+    cameraUp: [0, 0, 1],
+    initialCameraPosition: eye.toArray(),
+    initialCameraLookAt: target.toArray(),
+    sharedMemoryForWorkers: false,     // works without COOP/COEP headers
+    dynamicScene: false,
+    sphericalHarmonicsDegree: 0,
+    antialiased: true,
+    useBuiltInControls: true,
+    selfDrivenMode: true,
+  });
+  let src = el.dataset.splat, format;
+  const inline = el.dataset.splatInline && document.getElementById(el.dataset.splatInline);
+  if (inline) {
+    const b64 = inline.textContent.replace(/\s+/g, '');
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    src = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
+    format = GS.SceneFormat.Splat;
+  }
+  viewer.addSplatScene(src, { showLoadingUI: true, progressiveLoad: true, format }).then(() => {
+    viewer.start();
+    const c = viewer.controls || viewer.perspectiveControls;
+    if (c) {
+      c.target.copy(target);
+      c.autoRotate = true;
+      c.autoRotateSpeed = o.speed;
+      c.minDistance = 0.35 * o.distance;
+      c.maxDistance = 3.0 * o.distance;
+      c.minPolarAngle = 0.15;
+      c.maxPolarAngle = Math.PI / 2 - 0.02;   // stay above the ground
+      c.update();
+      let timer = null;
+      const pause = () => { c.autoRotate = false; clearTimeout(timer); timer = setTimeout(() => { c.autoRotate = true; }, 3000); };
+      renderer.domElement.addEventListener('pointerdown', pause);
+      renderer.domElement.addEventListener('wheel', pause, { passive: true });
+    }
+  }).catch((err) => {
+    el.textContent = 'Could not load the 3D model.';
+    console.error('splat-embed', el.dataset.splat, err);
+  });
+}
+
+function init() {
+  const els = document.querySelectorAll('[data-splat], [data-splat-inline]');
+  if (!('IntersectionObserver' in window)) { els.forEach(startViewer); return; }
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) { startViewer(e.target); io.unobserve(e.target); }
+  }, { rootMargin: '200px' });
+  els.forEach((el) => {
+    // already on screen (e.g. a full-page viewer in an iframe): start now, don't wait for the observer
+    const r = el.getBoundingClientRect();
+    if (r.width > 0 && r.bottom > -200 && r.top < window.innerHeight + 200) startViewer(el);
+    else io.observe(el);
+  });
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+else init();
